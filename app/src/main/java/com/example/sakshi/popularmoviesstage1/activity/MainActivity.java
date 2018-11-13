@@ -1,8 +1,6 @@
 package com.example.sakshi.popularmoviesstage1.activity;
 
-import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -10,6 +8,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.OrientationHelper;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -18,6 +17,8 @@ import android.widget.Toast;
 import com.example.sakshi.popularmoviesstage1.R;
 import com.example.sakshi.popularmoviesstage1.adapter.MovieAdapter;
 import com.example.sakshi.popularmoviesstage1.model.Movie;
+import com.example.sakshi.popularmoviesstage1.utils.Constant;
+import com.example.sakshi.popularmoviesstage1.utils.Utils;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -30,29 +31,37 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = MainActivity.class.getSimpleName();
-    private final String TMDB_BASE_URL = "https://api.themoviedb.org/3/discover/movie?";
-    private final String SORT_BY_PARAM = "sort_by";
-    private final String API_KEY_PARAM = "api_key";
     private RecyclerView mRvMovies;
-    private  String API_KEY;
+    private String API_KEY,mSortType;
+    private SharedPreferences sharedPreferences;
+    private  SharedPreferences.Editor editor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
         initUI();
         API_KEY = this.getResources().getString(R.string.api_key);
 
+        sharedPreferences = getSharedPreferences(Constant.SHARED_PREF_NAME,MODE_PRIVATE);
+        mSortType = sharedPreferences.getString("sort_type", "popular");
 
-        new FetchMovieDB().execute(getURL(""));
+        if(mSortType.equals("popular"))
+            getSupportActionBar().setTitle(R.string.most_popular_menu_title);
+        else if(mSortType.equals("top_rated"))
+            getSupportActionBar().setTitle(R.string.top_rated_menu_title);
 
+        if(Utils.isNetworkAvailable(this)) {
+            new FetchMovieDB().execute(getURL(mSortType));
+        }
+        else {
+            Toast.makeText(this, "Please check your internet connection", Toast.LENGTH_SHORT).show();
+        }
 
     }
 
@@ -61,13 +70,22 @@ public class MainActivity extends AppCompatActivity {
         mRvMovies = findViewById(R.id.rvmovies);
     }
     private String getURL(String sortByParam){
+        if(!TextUtils.isEmpty(sortByParam)) {
+            Uri builtUri = Uri.parse(Constant.TMDB_BASE_URL).buildUpon()
+                    .appendPath(sortByParam)
+                    .appendQueryParameter(Constant.API_KEY_PARAM, API_KEY)
+                    .build();
 
-        Uri builtUri = Uri.parse(TMDB_BASE_URL).buildUpon()
-                .appendQueryParameter(SORT_BY_PARAM, sortByParam)
-                .appendQueryParameter(API_KEY_PARAM, API_KEY)
-                .build();
+            return builtUri.toString();
+        }
+        else
+        {
+            Uri builtUri = Uri.parse(Constant.TMDB_BASE_URL).buildUpon()
+                    .appendQueryParameter(Constant.API_KEY_PARAM, API_KEY)
+                    .build();
 
-        return builtUri.toString();
+            return builtUri.toString();
+        }
     }
 
     private void setMovieList(List<Movie> movieList) {
@@ -100,11 +118,13 @@ public class MainActivity extends AppCompatActivity {
 
                     bufferedReader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
 
+
                     StringBuilder response = new StringBuilder();
                     String inputLine;
                     while ((inputLine = bufferedReader.readLine()) != null) {
                         response.append(inputLine);
                     }
+
                     result = response.toString();
                     return result;
                 } else {
@@ -140,30 +160,31 @@ public class MainActivity extends AppCompatActivity {
             final String TAG_RELEASE_DATE = "release_date";
 
             try {
-                JSONObject movieJsonObj = new JSONObject(s);
+                if(!TextUtils.isEmpty(s)) {
+                    JSONObject movieJsonObj = new JSONObject(s);
 
-                JSONArray results = movieJsonObj.getJSONArray(TAG_RESULTS);
+                    JSONArray results = movieJsonObj.getJSONArray(TAG_RESULTS);
+                    if (results != null) {
+                        List<Movie> movieList = new ArrayList<>();
 
-                List<Movie> movieList = new ArrayList<>();
-
-                for (int i = 0; i < results.length(); i++) {
-                    Movie movie = new Movie();
-                    JSONObject movieDetails = results.getJSONObject(i);
-                    movie.setOriginalTitle(movieDetails.getString(TAG_ORIGINAL_TITLE));
-                    movie.setPosterPath(movieDetails.getString(TAG_POSTER_PATH));
-                    movie.setOverview(movieDetails.getString(TAG_OVERVIEW));
-                    movie.setVoteAverage(movieDetails.getDouble(TAG_VOTE_AVERAGE));
-                    movie.setReleaseDate(movieDetails.getString(TAG_RELEASE_DATE));
-                    movieList.add(movie);
-                }
-                setMovieList(movieList);
-                if(mRvMovies!=null) {
-                    mRvMovies.setHasFixedSize(true);
-                    StaggeredGridLayoutManager staggeredGridLayoutManager=new StaggeredGridLayoutManager(2,OrientationHelper.VERTICAL);
-                   // staggeredGridLayoutManager.setGapStrategy(StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS);
-                    mRvMovies.setLayoutManager(staggeredGridLayoutManager);
-                    //mRvMovies.setItemAnimator(new DefaultItemAnimator());
-                    mRvMovies.setAdapter(new MovieAdapter(movieList, MainActivity.this));
+                        for (int i = 0; i < results.length(); i++) {
+                            Movie movie = new Movie();
+                            JSONObject movieDetails = results.getJSONObject(i);
+                            movie.setOriginalTitle(movieDetails.getString(TAG_ORIGINAL_TITLE));
+                            movie.setPosterPath(movieDetails.getString(TAG_POSTER_PATH));
+                            movie.setOverview(movieDetails.getString(TAG_OVERVIEW));
+                            movie.setVoteAverage(movieDetails.getDouble(TAG_VOTE_AVERAGE));
+                            movie.setReleaseDate(movieDetails.getString(TAG_RELEASE_DATE));
+                            movieList.add(movie);
+                        }
+                        setMovieList(movieList);
+                        if (mRvMovies != null) {
+                            mRvMovies.setHasFixedSize(true);
+                            StaggeredGridLayoutManager staggeredGridLayoutManager = new StaggeredGridLayoutManager(2, OrientationHelper.VERTICAL);
+                            mRvMovies.setLayoutManager(staggeredGridLayoutManager);
+                            mRvMovies.setAdapter(new MovieAdapter(movieList, MainActivity.this));
+                        }
+                    }
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -186,20 +207,28 @@ public class MainActivity extends AppCompatActivity {
         switch (id){
             case R.id.most_popular:
                 item.setChecked(!item.isChecked());
-                if(isNetworkAvailable()) {
+                if(Utils.isNetworkAvailable(MainActivity.this)) {
+                    editor=sharedPreferences.edit();
+                    editor.putString(Constant.SHARED_PREF_NAME,"popular");
+                    editor.apply();
+                    getSupportActionBar().setTitle(R.string.most_popular_menu_title);
                     Toast.makeText(this, "Sorting movies by popularity", Toast.LENGTH_SHORT).show();
-                    new FetchMovieDB().execute(getURL("popularity.desc"));
+                    new FetchMovieDB().execute(getURL("popular"));
                 }else
-                    Toast.makeText(this, "Please check internet connection", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Please check your internet connection", Toast.LENGTH_SHORT).show();
                 return true;
             case R.id.top_rated:
                 item.setChecked(!item.isChecked());
-                if(isNetworkAvailable()) {
+                if(Utils.isNetworkAvailable(MainActivity.this)) {
+                    SharedPreferences.Editor editor=sharedPreferences.edit();
+                    editor.putString(Constant.SHARED_PREF_NAME,"top_rated");
+                    editor.apply();
+                    getSupportActionBar().setTitle(R.string.top_rated_menu_title);
                     Toast.makeText(this, "Sorting movies by top rated", Toast.LENGTH_SHORT).show();
-                    new FetchMovieDB().execute(getURL("vote_average.desc"));
+                    new FetchMovieDB().execute(getURL("top_rated"));
                 }
                 else
-                    Toast.makeText(this, "Please check internet connection", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Please check your internet connection", Toast.LENGTH_SHORT).show();
 
                 return true;
 
@@ -208,13 +237,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private boolean isNetworkAvailable() {
-        ConnectivityManager connectivityManager
-                = (ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo activeNetworkInfo = Objects.requireNonNull(connectivityManager).getActiveNetworkInfo();
-
-        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
-    }
 
 }
 

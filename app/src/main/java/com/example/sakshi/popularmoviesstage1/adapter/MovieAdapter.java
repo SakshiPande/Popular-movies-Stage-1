@@ -2,6 +2,7 @@ package com.example.sakshi.popularmoviesstage1.adapter;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.Parcelable;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -14,6 +15,7 @@ import com.example.sakshi.popularmoviesstage1.activity.MovieDetailsActivity;
 import com.example.sakshi.popularmoviesstage1.model.Movie;
 import com.squareup.picasso.Picasso;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class MovieAdapter extends RecyclerView.Adapter<MovieAdapter.MovieViewHolder> {
@@ -62,6 +64,8 @@ public class MovieAdapter extends RecyclerView.Adapter<MovieAdapter.MovieViewHol
             @Override
             public void onClick(View v) {
                 Intent intent=new Intent(mContext, MovieDetailsActivity.class);
+
+
                 intent.putExtra("title",movie.getOriginalTitle());
                 intent.putExtra("date",movie.getReleaseDate());
                 intent.putExtra("review",movie.getVoteAverage());
